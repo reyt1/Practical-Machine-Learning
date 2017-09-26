@@ -1,0 +1,129 @@
+---
+title: "MachineLearning"
+author: "Reynaldo"
+date: "25 de septiembre de 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## step 1: download zip file from website to new folder call: data
+```{r, echo=FALSE}
+getwd()
+if(!file.exists("./MLearning")) dir.create("./MLearning")
+fileUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fileUrl, destfile = "./Mlearning/TrainingData.csv")
+fileUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileUrl, destfile = "./Mlearning/TestingData.csv")
+```
+## step 2: load data into R and get dimension of every new read
+```{r, echo=FALSE}
+rm(list=ls()) 
+TrD <- read.csv("./MLearning/TrainingData.csv",na.strings=c('','NA'))
+TrD1<-TrD[,!apply(TrD,2,function(x) any(is.na(x)) )]
+TrD2<-TrD1[,-c(1:7)]
+TtD <- read.csv("./MLearning/TestingData.csv")
+dim(TrD)
+dim(TrD2)
+head(TrD2)
+dim(TtD)
+```
+## step3: Load Packages
+```{r, echo=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(corrplot)
+library(rattle)
+library(tidyverse)
+```
+##Step4: Create a partition with the training dataset 
+```{r, echo=FALSE}
+inTrain<- createDataPartition(TrD2$classe, p=0.7, list=FALSE)
+TrainSet <- TrD2[inTrain, ]
+TestSet  <- TrD2[-inTrain, ]
+dim(TrainSet)
+dim(TestSet)
+```
+### remove identification only variables (columns 1 to 5)
+```{r, echo=FALSE}
+TrainSet <- TrainSet[, -(1:5)]
+TestSet  <- TestSet[, -(1:5)]
+dim(TrainSet)
+dim(TestSet)
+```
+##Step5: Correlation
+```{r Correlation, echo=true}
+corMatrix <- cor(TrainSet[, -48])
+corrplot(corMatrix, order = "FPC", method = "color", type = "lower",title = 'Correlation among Traits', tl.cex = 0.8, tl.col = rgb(0, 0, 0))
+```
+##Step6: Prediction Model
+###A.- Randon Forest 
+Model fit
+```{r RF, echo=true}
+set.seed(12345)
+Control.RF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+FitRF <- train(classe ~ ., data=TrainSet, method="rf",
+                          trControl=Control.RF)
+FitRF$finalModel
+```
+# prediction on Test dataset
+```{r Confusion.Matrix RF, echo=true}
+Predict.RF <- predict(FitRF, newdata=TestSet)
+Confusion.Matrix.RF <- confusionMatrix(Predict.RF, TestSet$classe)
+Confusion.Matrix.RF
+```
+### Plot matrix results
+```{r plot ConfMat, echo=true}
+plot(Confusion.Matrix.RF$table, col = Confusion.Matrix.RF$byClass, 
+     main = paste("Accuracy for Random Forest Model =",
+                  round(confMatRandForest$overall['Accuracy'], 2)))
+```
+###B.- Method: Decision Trees
+model fit
+```{r plot DT, echo=true}
+set.seed(12345)
+Fit.DT <- rpart(classe ~ ., data=TrainSet, method="class")
+fancyRpartPlot(Fit.DT)
+```
+Prediction: Test dataset
+```{r Confusion.Matrix.DT, echo=true}
+Prediction.DT <- predict(Fit.DT, newdata=TestSet, type="class")
+Confusion.Matrix.DT <- confusionMatrix(Prediction.DT, TestSet$classe)
+Confusion.Matrix.DT
+```
+
+```{r Plot Confusion.Matrix.DT, echo=true}
+plot(Confusion.Matrix.DT$table, col = Confusion.Matrix.DT$byClass, 
+     main = paste("Accuracy for Desicion Tree =",
+                  round(Confusion.Matrix.DT$overall['Accuracy'], 2)))
+```
+###C.- Method: Generalized Boosted Model
+model fit
+```{r GBM , echo=true}
+set.seed(12345)
+Control.GBM <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+Fit.GBM  <- train(classe ~ ., data=TrainSet, method = "gbm",
+                    trControl = Control.GBM, verbose = FALSE)
+Fit.GBM$finalModel
+```
+
+Prediction Test dataset
+```{r Prediction GBM , echo=true}
+Predict.GBM <- predict(Fit.GBM, newdata=TestSet)
+Confusion.Matrix.GBM <- confusionMatrix(Predict.GBM, TestSet$classe)
+Confusion.Matrix.GBM
+```
+
+plot matrix results
+```{r Plot Prediction GBM , echo=true}
+plot(Confusion.Matrix.GBM$table, col =Confusion.Matrix.GBM$byClass, 
+     main = paste("Accuracy for GBM =", round(Confusion.Matrix.GBM$overall['Accuracy'], 2)))
+```
+## Step 7: Selected Model to the Test Data
+```{r Select Model , echo=true}
+Predict.Test <- predict(FitRF, newdata=TtD)
+Predict.Test
+```
